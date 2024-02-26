@@ -10,7 +10,7 @@ meta/documentation/generated/
 *.xcworkspace/
 xcuserdata/
 
-build
+build*
 
 *.pbxuser
 *.perspective

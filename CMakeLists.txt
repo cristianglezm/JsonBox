@@ -35,15 +35,14 @@ set(JSONBOX_HEADERS
 
 # set options for android
 if(CMAKE_SYSTEM_NAME MATCHES "Android")
-	message("-- Compiling for Android")
-    set(BUILD_SHARED_LIBS TRUE)
+    message("-- Compiling for Android")
     if (CMAKE_ANDROID_API LESS 14)
         message(FATAL_ERROR "Android API level (${CMAKE_ANDROID_API}) must be equal or greater than 14.")
     endif()
     if(CMAKE_VS_PLATFORM_NAME STREQUAL "Tegra-Android")
         message(WARNING "CMake might not properly support setting the STL. Make sure to adjust all generated library projects!")
     endif()
-	set(ANDROID_NDK "$ENV{ANDROID_NDK}")
+    set(ANDROID_NDK "$ENV{ANDROID_NDK}")
     set(CMAKE_INSTALL_PREFIX ${CMAKE_ANDROID_NDK}/sources/third_party/JsonBox)
     set(DEFAULT_INSTALL_MISC_DIR ${CMAKE_ANDROID_NDK}/sources/third_party/JsonBox)
     set(LIB_SUFFIX "/${CMAKE_ANDROID_ARCH_ABI}")
