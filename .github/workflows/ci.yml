@@ -1,0 +1,74 @@
+name: ci
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}
+    runs-on: ${{ matrix.platform.os  }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+        - { name: Windows VS2019 x86,             os: windows-2019, flags: -GNinja }
+        - { name: Windows VS2019 x64,             os: windows-2019, flags: -GNinja }
+        - { name: Windows VS2022 x86,             os: windows-2022, flags: -GNinja }
+        - { name: Windows VS2022 x64,             os: windows-2022, flags: -GNinja }
+        - { name: Windows LLVM/Clang,             os: windows-2022, flags: -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -GNinja }
+        - { name: Windows MinGW,                  os: windows-2022, flags: -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -GNinja }
+        - { name: Linux GCC,                      os: ubuntu-22.04, flags: -GNinja }
+        - { name: Linux Clang,                    os: ubuntu-22.04, flags: -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -GNinja }
+        config:
+        - { name: Shared, flags: -DBUILD_SHARED_LIBS=TRUE }
+        - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+        type:
+        - { name: Release }
+        - { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+
+        include:
+        - platform: { name: Android, os: ubuntu-22.04 }
+          config: { name: x86 (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=x86 -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: x86, api: 33 }
+          type: { name: Release }
+        - platform: { name: Android, os: ubuntu-22.04 }
+          config: { name: x86_64 (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=x86_64 -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: x86_64, api: 33 }
+          type: { name: Release }
+        - platform: { name: Android, os: ubuntu-22.04 }
+          config: { name: armeabi-v7a (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=armeabi-v7a -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: armeabi-v7a, api: 33 }
+          type: { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+        - platform: { name: Android, os: ubuntu-22.04 }
+          config: { name: arm64-v8a (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: arm64-v8a, api: 33 }
+          type: { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set VS Arch
+      if: contains(matrix.platform.name, 'Windows VS') && !contains(matrix.platform.name, 'MSBuild')
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ contains(matrix.platform.name, 'x86') && 'x86' || 'x64' }}
+
+    - name: Get CMake and Ninja
+      uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: ${{ runner.os == 'Windows' && '3.27' || '3.27' }}
+        ninjaVersion: latest
+
+    - name: Install Android Components
+      if: matrix.platform.name == 'Android'
+      run: |
+        echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
+        echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125"
+
+    - name: build
+      run: |
+        mkdir build && cd build
+        cmake  ${{ matrix.config.flags }} ${{ matrix.platform.flags }} ..
+        cmake --build . --config ${{ matrix.type.name }}
