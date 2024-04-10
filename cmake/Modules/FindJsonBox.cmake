@@ -26,9 +26,21 @@ if(JsonBox_ROOT)
         SET(LIB_SUFFIX "/${CMAKE_ANDROID_ARCH_ABI}")
     endif(CMAKE_SYSTEM_NAME MATCHES "Android")
 	SET(JsonBox_INCLUDE_DIR "${JsonBox_ROOT}/include")
-    SET(JsonBox_LIBRARY "${JsonBox_ROOT}/lib${LIB_SUFFIX}/libJsonBox.a")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+       if(CMAKE_BUILD_TYPE MATCHES "Debug")
+            SET(JsonBox_LIBRARY "${JsonBox_ROOT}/lib${LIB_SUFFIX}/JsonBox_d.lib")
+        else()
+            SET(JsonBox_LIBRARY "${JsonBox_ROOT}/lib${LIB_SUFFIX}/JsonBox.lib")
+        endif()
+    else()
+       if(CMAKE_BUILD_TYPE MATCHES "Debug")
+            SET(JsonBox_LIBRARY "${JsonBox_ROOT}/lib${LIB_SUFFIX}/libJsonBox_d.a")
+        else()
+            SET(JsonBox_LIBRARY "${JsonBox_ROOT}/lib${LIB_SUFFIX}/libJsonBox.a")
+        endif()
+    endif()
     SET(JsonBox_LIBRARIES ${JsonBox_LIBRARY})
-	SET(JsonBox_FOUND 1)
+    SET(JsonBox_FOUND 1)
 endif(JsonBox_ROOT)
 
 find_path(JsonBox_INCLUDE_DIR include/JsonBox.h
@@ -36,7 +48,7 @@ find_path(JsonBox_INCLUDE_DIR include/JsonBox.h
           PATHS ${FIND_JsonBox_PATHS})
 
 find_library(JsonBox_LIBRARY
-		NAMES JsonBox JsonBox.a
+		NAMES JsonBox
 		PATH_SUFFIXES lib
 		PATHS ${FIND_JsonBox_PATHS})
 
