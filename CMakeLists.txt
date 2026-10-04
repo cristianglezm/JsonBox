@@ -2,7 +2,17 @@ cmake_minimum_required(VERSION 3.7.2...3.17)
 
 project(JsonBox)
 
+option(JsonBox_BUILD_TESTS "Build the tests" OFF)
+option(JsonBox_BUILD_FUZZERS "Build the libFuzzer harnesses (Clang only)" OFF)
+option(JsonBox_BUILD_EXAMPLES "Build the examples" ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
+
 include(GenerateExportHeader)
+
+# The library and the executables that use it go to the same directory, so a Windows
+# shared build finds JsonBox.dll next to the tests.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN TRUE)
@@ -67,6 +77,11 @@ endif()
 
 generate_export_header(JsonBox EXPORT_FILE_NAME Export.h)
 
+if(EMSCRIPTEN)
+  # the parser reports errors with exceptions, which Emscripten leaves off by default
+  target_compile_options(JsonBox PUBLIC -fexceptions)
+endif()
+
 target_include_directories(JsonBox PRIVATE
   ${PROJECT_SOURCE_DIR}/include
   ${PROJECT_BINARY_DIR}
@@ -111,6 +126,27 @@ install(EXPORT ${PROJECT_NAME}
 
 
 # examples
-add_executable(example1 "${CMAKE_CURRENT_SOURCE_DIR}/examples/main.cpp")
-add_dependencies(example1 JsonBox)
-target_link_libraries(example1 JsonBox)
+if(JsonBox_BUILD_EXAMPLES)
+  add_executable(example1 "${CMAKE_CURRENT_SOURCE_DIR}/examples/main.cpp")
+  add_dependencies(example1 JsonBox)
+  target_link_libraries(example1 JsonBox)
+endif()
+
+# tests
+if(JsonBox_BUILD_TESTS)
+  if(CMAKE_VERSION VERSION_LESS 3.13)
+    message(FATAL_ERROR "JsonBox_BUILD_TESTS needs CMake >= 3.13 (found ${CMAKE_VERSION}).")
+  endif()
+  enable_testing()
+  find_package(GTest CONFIG REQUIRED)
+  add_subdirectory(test)
+endif()
+
+# fuzzers
+if(JsonBox_BUILD_FUZZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(FATAL_ERROR "JsonBox_BUILD_FUZZERS requires Clang (got ${CMAKE_CXX_COMPILER_ID}), "
+      "reconfigure with -DCMAKE_CXX_COMPILER=clang++.")
+  endif()
+  add_subdirectory(test/fuzz)
+endif()
