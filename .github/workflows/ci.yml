@@ -1,9 +1,15 @@
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [master]
+    tags: ["*"]
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -11,64 +17,226 @@ defaults:
 jobs:
   build:
     name: ${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}
-    runs-on: ${{ matrix.platform.os  }}
+    runs-on: ${{ matrix.platform.os }}
+
     strategy:
       fail-fast: false
       matrix:
         platform:
-        - { name: Windows VS2019 x86,             os: windows-2019, flags: -GNinja }
-        - { name: Windows VS2019 x64,             os: windows-2019, flags: -GNinja }
-        - { name: Windows VS2022 x86,             os: windows-2022, flags: -GNinja }
-        - { name: Windows VS2022 x64,             os: windows-2022, flags: -GNinja }
-        - { name: Windows LLVM/Clang,             os: windows-2022, flags: -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -GNinja }
-        - { name: Windows MinGW,                  os: windows-2022, flags: -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -GNinja }
-        - { name: Linux GCC,                      os: ubuntu-22.04, flags: -GNinja }
-        - { name: Linux Clang,                    os: ubuntu-22.04, flags: -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -GNinja }
+          - {
+              name: Windows MinGW,
+              os: windows-2025,
+              flags: -GNinja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DJsonBox_BUILD_TESTS=TRUE,
+            }
+          - {
+              name: Windows LLVM,
+              os: windows-2025,
+              flags: -GNinja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DJsonBox_BUILD_TESTS=TRUE,
+            }
+          - {
+              name: Windows MSVC,
+              os: windows-2025,
+              flags: -GNinja -DJsonBox_BUILD_TESTS=TRUE,
+            }
+          - {
+              name: Linux GCC,
+              os: ubuntu-24.04,
+              flags: -G"Unix Makefiles" -DJsonBox_BUILD_TESTS=TRUE,
+            }
+          - {
+              name: Linux Clang,
+              os: ubuntu-24.04,
+              flags: -G"Unix Makefiles" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DJsonBox_BUILD_TESTS=TRUE,
+            }
+          - {
+              name: macOS,
+              os: macos-15,
+              flags: -GNinja -DJsonBox_BUILD_TESTS=TRUE,
+            }
+          - {
+              name: macOS Xcode,
+              os: macos-15,
+              flags: -GXcode -DJsonBox_BUILD_TESTS=TRUE,
+            }
+
         config:
-        - { name: Shared, flags: -DBUILD_SHARED_LIBS=TRUE }
-        - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+          - { name: Shared, flags: -DBUILD_SHARED_LIBS=TRUE }
+          - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+
         type:
-        - { name: Release }
-        - { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+          - { name: Release, flags: -DCMAKE_BUILD_TYPE=Release }
+          - { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
 
         include:
-        - platform: { name: Android, os: ubuntu-22.04 }
-          config: { name: x86 (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=x86 -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: x86, api: 33 }
-          type: { name: Release }
-        - platform: { name: Android, os: ubuntu-22.04 }
-          config: { name: x86_64 (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=x86_64 -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: x86_64, api: 33 }
-          type: { name: Release }
-        - platform: { name: Android, os: ubuntu-22.04 }
-          config: { name: armeabi-v7a (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=armeabi-v7a -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: armeabi-v7a, api: 33 }
-          type: { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
-        - platform: { name: Android, os: ubuntu-22.04 }
-          config: { name: arm64-v8a (API 33), flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.1.10909125 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared, arch: arm64-v8a, api: 33 }
-          type: { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+          - platform: { name: Android, os: ubuntu-24.04 }
+            config:
+              {
+                name: x86 (API 33),
+                flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=x86 -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.2.11394342 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared,
+              }
+            type: { name: Release, flags: -DCMAKE_BUILD_TYPE=Release }
+          - platform: { name: Android, os: ubuntu-24.04 }
+            config:
+              {
+                name: x86_64 (API 33),
+                flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=x86_64 -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.2.11394342 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared,
+              }
+            type: { name: Release, flags: -DCMAKE_BUILD_TYPE=Release }
+          - platform: { name: Android, os: ubuntu-24.04 }
+            config:
+              {
+                name: armeabi-v7a (API 33),
+                flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=armeabi-v7a -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.2.11394342 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared,
+              }
+            type: { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+          - platform: { name: Android, os: ubuntu-24.04 }
+            config:
+              {
+                name: arm64-v8a (API 33),
+                flags: -GNinja -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_VERSION=33 -DCMAKE_ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/26.2.11394342 -DBUILD_SHARED_LIBS=TRUE -DCMAKE_ANDROID_STL_TYPE=c++_shared,
+              }
+            type: { name: Debug, flags: -DCMAKE_BUILD_TYPE=Debug }
+
+          - platform:
+              {
+                name: Emscripten,
+                os: ubuntu-24.04,
+                flags: -DJsonBox_BUILD_TESTS=TRUE,
+              }
+            config:
+              {
+                name: Static,
+                flags: -G"Unix Makefiles" -DBUILD_SHARED_LIBS=FALSE,
+              }
+            type: { name: Release, flags: -DCMAKE_BUILD_TYPE=Release }
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v7
 
-    - name: Set VS Arch
-      if: contains(matrix.platform.name, 'Windows VS') && !contains(matrix.platform.name, 'MSBuild')
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: ${{ contains(matrix.platform.name, 'x86') && 'x86' || 'x64' }}
+      - name: Setup MSYS2
+        if: runner.os == 'Windows' && matrix.platform.name != 'Windows MSVC'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-clang
 
-    - name: Get CMake and Ninja
-      uses: lukka/get-cmake@latest
-      with:
-        cmakeVersion: ${{ runner.os == 'Windows' && '3.27' || '3.27' }}
-        ninjaVersion: latest
+      - name: Setup MSVC Developer Command Prompt
+        if: matrix.platform.name == 'Windows MSVC'
+        uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Install Android Components
-      if: matrix.platform.name == 'Android'
-      run: |
-        echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
-        echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125"
+      - name: Get CMake and Ninja
+        if: runner.os != 'Windows' || matrix.platform.name == 'Windows MSVC'
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "3.28"
+          ninjaVersion: latest
 
-    - name: build
-      run: |
-        mkdir build && cd build
-        cmake  ${{ matrix.config.flags }} ${{ matrix.platform.flags }} ..
-        cmake --build . --config ${{ matrix.type.name }}
+      - name: Cache Desktop Deps
+        if: matrix.platform.name != 'Android' && matrix.platform.name != 'Emscripten'
+        id: cache-desktop
+        uses: actions/cache@v6
+        with:
+          path: googletest/build/install
+          key: desktop-${{ runner.os }}-${{ matrix.platform.name }}-${{ matrix.type.name }}-${{ hashFiles('.devops/install_dependencies.sh') }}
+
+      - name: Cache Emscripten Deps
+        if: matrix.platform.name == 'Emscripten'
+        id: cache-emscripten
+        uses: actions/cache@v6
+        with:
+          path: |
+            emsdk
+            googletest/build/install
+          key: emscripten-${{ matrix.type.name }}-${{ hashFiles('.devops/install_dependencies.sh') }}
+
+      - name: Install Android components
+        if: matrix.platform.name == 'Android'
+        run: |
+          echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
+          echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.2.11394342"
+
+      - name: Build Dependencies (Windows)
+        if: runner.os == 'Windows' && matrix.platform.name != 'Windows MSVC' && steps.cache-desktop.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: |
+          ./.devops/install_dependencies.sh "${{ matrix.platform.name }}" ${{ matrix.type.name }}
+
+      - name: Build Dependencies (Windows MSVC)
+        if: matrix.platform.name == 'Windows MSVC' && steps.cache-desktop.outputs.cache-hit != 'true'
+        run: |
+          ./.devops/install_dependencies.sh "${{ matrix.platform.name }}" ${{ matrix.type.name }}
+
+      - name: Build Dependencies (Linux/Mac)
+        if: runner.os != 'Windows' && matrix.platform.name != 'Android' && matrix.platform.name != 'Emscripten' && steps.cache-desktop.outputs.cache-hit != 'true'
+        run: |
+          bash .devops/install_dependencies.sh "${{ matrix.platform.name }}" ${{ matrix.type.name }}
+
+      - name: Build Dependencies (Emscripten)
+        if: matrix.platform.name == 'Emscripten' && steps.cache-emscripten.outputs.cache-hit != 'true'
+        run: |
+          bash .devops/install_dependencies.sh "${{ matrix.platform.name }}" ${{ matrix.type.name }}
+
+      - name: Build and Test (Windows)
+        if: runner.os == 'Windows' && matrix.platform.name != 'Windows MSVC'
+        shell: msys2 {0}
+        run: |
+          export GT_ROOT=$(cd googletest/build/install && pwd -W)
+          mkdir build && cd build
+          cmake \
+            ${{ matrix.config.flags }} ${{ matrix.platform.flags }} ${{ matrix.type.flags }} \
+            -DCMAKE_PREFIX_PATH="$GT_ROOT" \
+            ..
+          cmake --build . --config ${{ matrix.type.name }} -j 4
+          export PATH=$PATH:/mingw64/bin
+          ctest --output-on-failure -C ${{ matrix.type.name }}
+
+      - name: Build and Test (Windows MSVC)
+        if: matrix.platform.name == 'Windows MSVC'
+        run: |
+          export GT_ROOT=$(cd googletest/build/install && pwd -W)
+          mkdir build && cd build
+          cmake \
+            ${{ matrix.config.flags }} ${{ matrix.platform.flags }} ${{ matrix.type.flags }} \
+            -DCMAKE_PREFIX_PATH="$GT_ROOT" \
+            ..
+          cmake --build . --config ${{ matrix.type.name }} -j 4
+          ctest --output-on-failure -C ${{ matrix.type.name }}
+
+      - name: Build and Test (Linux/Mac)
+        if: runner.os != 'Windows' && matrix.platform.name != 'Android' && matrix.platform.name != 'Emscripten'
+        run: |
+          mkdir build && cd build
+          cmake \
+            ${{ matrix.config.flags }} ${{ matrix.platform.flags }} ${{ matrix.type.flags }} \
+            -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/googletest/build/install \
+            ..
+          cmake --build . --config ${{ matrix.type.name }} -j 4
+          ctest --output-on-failure -C ${{ matrix.type.name }}
+
+      - name: Build and Test (Emscripten)
+        if: matrix.platform.name == 'Emscripten'
+        run: |
+          source ./emsdk/emsdk_env.sh
+          mkdir build && cd build
+          # the Emscripten toolchain only looks for packages under CMAKE_FIND_ROOT_PATH
+          emcmake cmake \
+            ${{ matrix.config.flags }} ${{ matrix.platform.flags }} ${{ matrix.type.flags }} \
+            -DCMAKE_FIND_ROOT_PATH=$GITHUB_WORKSPACE/googletest/build/install \
+            ..
+          cmake --build . --config ${{ matrix.type.name }} -j 4
+          ctest --output-on-failure
+
+      - name: Build (Android)
+        if: matrix.platform.name == 'Android'
+        run: |
+          mkdir build && cd build
+          cmake ${{ matrix.config.flags }} ${{ matrix.type.flags }} ..
+          cmake --build . --config ${{ matrix.type.name }} -j 4
