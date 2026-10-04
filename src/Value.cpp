@@ -630,15 +630,29 @@ namespace JsonBox {
 	void Value::loadFromStream(std::istream &input) {
 		char currentCharacter;
 
-		// We check that the stream is in UTF-8.
-		char encoding[2];
-		input.get(encoding[0]);
-		input.get(encoding[1]);
+		// We check that the stream is in UTF-8. A NUL among the first two characters means UTF-16/32;
+		// a character that was not read (input shorter than two characters) is not a NUL.
+		char encoding[2] = {'x', 'x'};
+		int probed = 0;
+		if (input.get(encoding[0])) {
+			++probed;
+			if (input.get(encoding[1])) {
+				++probed;
+			}
+		}
+		if (probed < 2 && !input.bad()) {
+			// the failed read only meant "end of input"; the characters that were read go back below
+			input.clear();
+		}
 
 		if (encoding[0] != '\0' && encoding[1] != '\0') {
 			// We put the characters back.
-			input.putback(encoding[1]);
-			input.putback(encoding[0]);
+			if (probed == 2) {
+				input.putback(encoding[1]);
+			}
+			if (probed >= 1) {
+				input.putback(encoding[0]);
+			}
 
 			// Boolean value used to stop reading characters after the value
 			// is done loading.
@@ -888,10 +902,11 @@ namespace JsonBox {
     {
         int tmpCounter = 0;
         unicode = 0;
-        while (tmpCounter < 4 && !input.eof())
+        while (tmpCounter < 4 && input.good())
         {
             char c;
-            input.get(c);
+            if (!input.get(c))
+                break;
             unicode *= 16;
             if ( c >= '0'  &&  c <= '9' )
                 unicode += c - '0';
@@ -957,7 +972,7 @@ namespace JsonBox {
 
 		// As long as there aren't any errors and that we haven't reached the
 		// end of the input stream.
-		while (noErrors && !input.eof()) {
+		while (noErrors && input.good()) {
 			input.get(currentCharacter);
 
 			if (input.good()) {
@@ -966,9 +981,7 @@ namespace JsonBox {
 					constructing << currentCharacter;
 
 				} else if (currentCharacter == Strings::Json::Escape::BEGIN_ESCAPE) {
-					if (!input.eof()) {
-						input.get(tmpCharacter);
-
+					if (input.good() && input.get(tmpCharacter)) {
 						switch (tmpCharacter) {
 						case Strings::Json::Escape::QUOTATION_MARK:
 							constructing << Strings::Std::QUOTATION_MARK;
@@ -1030,10 +1043,10 @@ namespace JsonBox {
 
 	void Value::readObject(std::istream &input, Object &result) {
 		bool noErrors = true;
-		char currentCharacter;
+		char currentCharacter = '\0';
 		std::string tmpString;
 
-		while (noErrors && !input.eof()) {
+		while (noErrors && input.good()) {
 			input.get(currentCharacter);
 
 			if (input.good()) {
@@ -1044,20 +1057,20 @@ namespace JsonBox {
 					// We read white spaces until the next non white space.
 					readToNonWhiteSpace(input, currentCharacter);
 
-					if (!input.eof()) {
+					if (input.good()) {
 
 						// We make sure it's the right character.
 						if (currentCharacter == Structural::NAME_SEPARATOR) {
 							// We read until the value starts.
 							readToNonWhiteSpace(input, currentCharacter);
 
-							if (!input.eof()) {
+							if (input.good()) {
 								// We put the character back and we load the value
 								// from the stream.
 								input.putback(currentCharacter);
 								result[tmpString].loadFromStream(input);
 
-								while (!input.eof() && currentCharacter != Structural::VALUE_SEPARATOR &&
+								while (input.good() && currentCharacter != Structural::VALUE_SEPARATOR &&
 								       currentCharacter != Structural::END_OBJECT) {
 									input.get(currentCharacter);
 								}
@@ -1082,9 +1095,9 @@ namespace JsonBox {
 
 	void Value::readArray(std::istream &input, Array &result) {
 		bool notDone = true;
-		char currentChar;
+		char currentChar = '\0';
 
-		while (notDone && !input.eof()) {
+		while (notDone && input.good()) {
 			input.get(currentChar);
 
 			if (input.good()) {
@@ -1101,7 +1114,7 @@ namespace JsonBox {
 						result.pop_back();
 					}
 
-					while (!input.eof() && currentChar != ',' &&
+					while (input.good() && currentChar != ',' &&
 					       currentChar != Structural::END_ARRAY) {
 						input.get(currentChar);
 					}
@@ -1116,10 +1129,10 @@ namespace JsonBox {
 
 	void Value::readNumber(std::istream &input, JsonBox::Value &result) {
 		bool notDone = true, inFraction = false, inExponent = false;
-		char currentCharacter;
+		char currentCharacter = '\0';
 		std::stringstream constructing;
 
-		if (!input.eof() && input.peek() == Numbers::DIGITS[0]) {
+		if (input.good() && input.peek() == Numbers::DIGITS[0]) {
 			// We make sure there isn't more than one zero.
 			input.get(currentCharacter);
 
@@ -1131,9 +1144,7 @@ namespace JsonBox {
 			}
 		}
 
-		while (notDone && !input.eof()) {
-			input.get(currentCharacter);
-
+		while (notDone && input.get(currentCharacter)) {
 			if (currentCharacter == '-') {
 				if (constructing.str().empty()) {
 					constructing << currentCharacter;
@@ -1156,7 +1167,7 @@ namespace JsonBox {
 					inExponent = true;
 					constructing << currentCharacter;
 
-					if (!input.eof() && (input.peek() == '-' || input.peek() == '+')) {
+					if (input.good() && (input.peek() == '-' || input.peek() == '+')) {
 						input.get(currentCharacter);
 						constructing << currentCharacter;
 					}
@@ -1182,8 +1193,11 @@ namespace JsonBox {
 
 	void Value::readToNonWhiteSpace(std::istream &input, char &currentCharacter) {
 		do {
-			input.get(currentCharacter);
-		} while (!input.eof() && isWhiteSpace(currentCharacter));
+			if (!input.get(currentCharacter)) {
+				currentCharacter = '\0';
+				return;
+			}
+		} while (isWhiteSpace(currentCharacter));
 	}
 
 	void Value::clear() {

@@ -694,13 +694,13 @@ namespace JsonBox {
 	 * output in a stream.
 	 * @see JsonBox::Value
 	 */
-	JSONBOX_EXPORT typedef std::vector<Value> Array;
+	typedef std::vector<Value> Array;
 	
 	/**
 	 * Represents a JSON object. It's a STL map that can be output in a stream.
 	 * @see JsonBox::Value
 	 */
-	JSONBOX_EXPORT typedef std::map<std::string, Value> Object;
+	typedef std::map<std::string, Value> Object;
 
 	JSONBOX_EXPORT std::ostream &operator<<(std::ostream &output, const Value &v);
 	JSONBOX_EXPORT std::ostream &operator<<(std::ostream &output, const Object &o);
