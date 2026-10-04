@@ -9,6 +9,12 @@
 #include "Export.h"
 
 namespace JsonBox {
+	class Value;
+
+	// Declared before the friend declaration in Value, which then takes over this linkage. Declaring it
+	// first there, without the export, and again with it below is an error on MSVC (C2375).
+	JSONBOX_EXPORT std::ostream &operator<<(std::ostream &output, const Value &v);
+
 	/**
 	 * Represents a json value. Can be a string, an integer, a floating point
 	 * number, an object, an array, a boolean value or a null value. To put it
