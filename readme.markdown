@@ -39,3 +39,7 @@ make install
 ```
 
 You should replace <android_ndk> with the actual folder.
+
+## Tests
+
+Build the tests with `-DJsonBox_BUILD_TESTS=ON` (needs GoogleTest, found with `find_package(GTest CONFIG)`, and CMake 3.13 or newer) and run `ctest` from the build directory. See `test/fuzz/README.md` for the fuzzers.
