@@ -46,8 +46,11 @@ namespace JsonBox {
 				result << static_cast<char>(MASK1BYTE | (*i & MASKBITS));
 			}
 			// 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
-			else if(*i < 0x8000000) {
+			// 31 bits, so every positive value is covered. The limit used to be 0x8000000, which dropped
+			// the values above it, and the byte for bits 24 to 29 was never written.
+			else {
 				result << static_cast<char>(MASK6BYTES | (*i >> 30));
+				result << static_cast<char>(MASK1BYTE | (*i >> 24 & MASKBITS));
 				result << static_cast<char>(MASK1BYTE | (*i >> 18 & MASKBITS));
 				result << static_cast<char>(MASK1BYTE | (*i >> 12 & MASKBITS));
 				result << static_cast<char>(MASK1BYTE | (*i >> 6 & MASKBITS));
@@ -64,9 +67,15 @@ namespace JsonBox {
 		String32::value_type tmpUnicodeChar;
 
 		for(std::string::const_iterator i = utf8String.begin() ; i < utf8String.end();) {
+			const std::string::size_type remaining = static_cast<std::string::size_type>(utf8String.end() - i);
+
 
 			// 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
 			if((*i & MASK6BYTES) == MASK6BYTES) {
+				if(remaining < 6) { // cut short: one replacement character, and the input is over
+					result.push_back(0xFFFD);
+					break;
+				}
 				tmpUnicodeChar = ((*i & 0x01) << 30) | ((*(i + 1) & MASKBITS) << 24)
 				                 | ((*(i + 2) & MASKBITS) << 18) | ((*(i + 3)
 				                         & MASKBITS) << 12)
@@ -75,6 +84,10 @@ namespace JsonBox {
 			}
 			// 111110xx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
 			else if((*i & MASK5BYTES) == MASK5BYTES) {
+				if(remaining < 5) { // cut short: one replacement character, and the input is over
+					result.push_back(0xFFFD);
+					break;
+				}
 				tmpUnicodeChar = ((*i & 0x03) << 24) | ((*(i + 1)
 				                                        & MASKBITS) << 18)
 				                 | ((*(i + 2) & MASKBITS) << 12) | ((*(i + 3)
@@ -84,6 +97,10 @@ namespace JsonBox {
 			}
 			// 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
 			else if((*i & MASK4BYTES) == MASK4BYTES) {
+				if(remaining < 4) { // cut short: one replacement character, and the input is over
+					result.push_back(0xFFFD);
+					break;
+				}
 				tmpUnicodeChar = ((*i & 0x07) << 18) | ((*(i + 1)
 				                                        & MASKBITS) << 12)
 				                 | ((*(i + 2) & MASKBITS) << 6) | (*(i + 3) & MASKBITS);
@@ -91,12 +108,20 @@ namespace JsonBox {
 			}
 			// 1110xxxx 10xxxxxx 10xxxxxx
 			else if((*i & MASK3BYTES) == MASK3BYTES) {
+				if(remaining < 3) { // cut short: one replacement character, and the input is over
+					result.push_back(0xFFFD);
+					break;
+				}
 				tmpUnicodeChar = ((*i & 0x0F) << 12) | ((*(i + 1) & MASKBITS) << 6)
 				                 | (*(i + 2) & MASKBITS);
 				i += 3;
 			}
 			// 110xxxxx 10xxxxxx
 			else if((*i & MASK2BYTES) == MASK2BYTES) {
+				if(remaining < 2) { // cut short: one replacement character, and the input is over
+					result.push_back(0xFFFD);
+					break;
+				}
 				tmpUnicodeChar = ((*i & 0x1F) << 6) | (*(i + 1) & MASKBITS);
 				i += 2;
 			}
