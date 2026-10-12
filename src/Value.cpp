@@ -1262,6 +1262,44 @@ namespace JsonBox {
 		}
 	}
 
+	namespace {
+		// The shortest text of 15, 16 or 17 significant digits that reads back as exactly the same
+		// double (17 always does). 0.5489 is written as 0.5489, not as 0.54890000000000005, and the
+		// text does not depend on the locale or the flags of the stream it ends up in.
+		std::string doubleToText(double value) {
+			// one pair of streams per thread, building them is most of the cost of writing a number
+			thread_local std::ostringstream out;
+			thread_local std::istringstream in;
+			thread_local bool ready = false;
+
+			if (!ready) {
+				out.imbue(std::locale::classic());
+				in.imbue(std::locale::classic());
+				ready = true;
+			}
+
+			std::string text;
+
+			for (int precision = 15; precision <= 17; ++precision) {
+				out.str(std::string());
+				out.clear();
+				out.precision(precision);
+				out << value;
+				text = out.str();
+				in.clear();
+				in.str(text);
+				double readBack = 0.0;
+				in >> readBack;
+
+				if (!in.fail() && readBack == value) {
+					break;
+				}
+			}
+
+			return text;
+		}
+	}
+
 	std::ostream &operator<<(std::ostream &output, const Value &v) {
 		switch (v.type) {
 		case Value::STRING:
@@ -1272,12 +1310,8 @@ namespace JsonBox {
 			output << v.getInteger();
 			break;
 
-		case Value::DOUBLE: {
-				std::streamsize precisionBackup = output.precision();
-				output.precision(17);
-				output << v.getDouble();
-				output.precision(precisionBackup);
-			}
+		case Value::DOUBLE:
+			output << doubleToText(v.getDouble());
 			break;
 
 		case Value::OBJECT:
