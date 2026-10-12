@@ -296,11 +296,17 @@ jobs:
           cmakeVersion: "3.28"
           ninjaVersion: latest
 
+      # The prefix is <build>/install, how the projects that use JsonBox install it: configuring must
+      # not put anything there, and nothing but include and lib may end up at its root (a config file
+      # there is one find_package finds, and it would not find its targets).
       - name: Install JsonBox
         run: |
-          cmake -S . -B build -GNinja -DJsonBox_BUILD_EXAMPLES=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -GNinja -DJsonBox_BUILD_EXAMPLES=FALSE -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/build/install
+          test ! -e build/install || { echo "configure created build/install"; exit 1; }
           cmake --build build
-          cmake --install build --prefix $GITHUB_WORKSPACE/install
+          cmake --install build
+          test -z "$(ls build/install/*.cmake 2>/dev/null)" || { echo "a .cmake file at the root of the prefix"; ls build/install; exit 1; }
 
       - name: Use it
         run: |
@@ -309,8 +315,8 @@ jobs:
             cmake -S test/package -B build-package-$mode -GNinja \
               -DJSONBOX_CONSUME=$mode \
               -DJSONBOX_SOURCE_DIR=$GITHUB_WORKSPACE \
-              -DJSONBOX_PREFIX=$GITHUB_WORKSPACE/install \
-              -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/install
+              -DJSONBOX_PREFIX=$GITHUB_WORKSPACE/build/install \
+              -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/build/install
             if [ "$mode" != "wrong-version" ]; then
               cmake --build build-package-$mode
               ./build-package-$mode/consumer

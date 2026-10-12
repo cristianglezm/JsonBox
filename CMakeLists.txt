@@ -140,23 +140,26 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/Export.h
 # The CMake package: find_package(JsonBox CONFIG) finds it under <prefix>, with the target JsonBox::JsonBox.
 include(CMakePackageConfigHelpers)
 set(JsonBox_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/JsonBox)
+# The files made here are only staged (in <build>/JsonBoxPackage, never <build>/install: that is where
+# the scripts of the projects that use JsonBox install it, and a config file at the root of an install
+# prefix is one find_package finds).
 install(EXPORT ${PROJECT_NAME}
   NAMESPACE JsonBox::
   DESTINATION ${JsonBox_CMAKE_DIR}
   FILE JsonBoxTargets.cmake
 )
 configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/JsonBoxConfig.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/JsonBoxPackage/JsonBoxConfig.cmake"
   INSTALL_DESTINATION ${JsonBox_CMAKE_DIR}
 )
 write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfigVersion.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/JsonBoxPackage/JsonBoxConfigVersion.cmake"
   VERSION ${PROJECT_VERSION}
   COMPATIBILITY SameMajorVersion
 )
 install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfigVersion.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/JsonBoxPackage/JsonBoxConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/JsonBoxPackage/JsonBoxConfigVersion.cmake"
   DESTINATION ${JsonBox_CMAKE_DIR}
 )
 # for -DJsonBox_DIR=<prefix>/lib/cmake, how the package used to be found
