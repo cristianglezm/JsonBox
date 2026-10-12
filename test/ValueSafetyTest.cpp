@@ -44,14 +44,32 @@ namespace{
     using JsonBox::Array;
     using JsonBox::Object;
 
+    // Can an allocation made by the library (not only by this executable) be made to fail? A replaced
+    // operator new reaches the library when it is linked in statically and, on most systems, when it is a
+    // shared library, but not on all of them (a DLL has its own allocator, for one).
     bool injectionWorks(){
-        allocations = 0;
-        failAt = 0;
         bool threw = false;
         try{
             // through a volatile pointer, or an optimizer may drop the allocation altogether
+            allocations = 0;
+            failAt = 0;
             int* volatile probe = new int(1);
             delete probe;
+        }catch(const std::bad_alloc&){
+            threw = true;
+        }
+        failAt = -1;
+        if(!threw){
+            return false;
+        }
+        // the first allocation of a string copy is made inside the library
+        const std::string text(200, 'x');
+        Value value;
+        threw = false;
+        try{
+            allocations = 0;
+            failAt = 0;
+            value.setString(text);
         }catch(const std::bad_alloc&){
             threw = true;
         }
