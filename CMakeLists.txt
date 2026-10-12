@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7.2...3.17)
 
-project(JsonBox)
+project(JsonBox VERSION 0.6.2)
 
 option(JsonBox_BUILD_TESTS "Build the tests" OFF)
 option(JsonBox_BUILD_FUZZERS "Build the libFuzzer harnesses (Clang only)" OFF)
@@ -67,6 +67,14 @@ if(CMAKE_SYSTEM_NAME MATCHES "Android")
 	install(FILES src/Android.mk DESTINATION .)
 endif(CMAKE_SYSTEM_NAME MATCHES "Android")
 
+# Where the libraries and the CMake package are installed: lib, or lib64 and lib/<arch> where the
+# platform wants it (GNUInstallDirs). LIB_SUFFIX is how it was done before: the Android build sets
+# it to /<abi>, and -DLIB_SUFFIX=64 still gives lib64.
+if(LIB_SUFFIX)
+  set(CMAKE_INSTALL_LIBDIR "lib${LIB_SUFFIX}")
+endif()
+include(GNUInstallDirs)
+
 # build library
 set(CMAKE_DEBUG_POSTFIX "_d")
 if(NOT BUILD_SHARED_LIBS)
@@ -74,6 +82,9 @@ if(NOT BUILD_SHARED_LIBS)
 else()
 	add_library(JsonBox SHARED ${JSONBOX_SOURCES} ${JSONBOX_HEADERS})
 endif()
+
+# the name an installed package gives it, for projects that use JsonBox through add_subdirectory or FetchContent
+add_library(JsonBox::JsonBox ALIAS JsonBox)
 
 generate_export_header(JsonBox EXPORT_FILE_NAME Export.h)
 
@@ -113,9 +124,9 @@ ENDMACRO(INSTALL_HEADERS_WITH_DIRECTORY)
 install(TARGETS JsonBox
   COMPONENT lib
   EXPORT ${PROJECT_NAME}
-  ARCHIVE DESTINATION lib${LIB_SUFFIX}
-  LIBRARY DESTINATION lib${LIB_SUFFIX}
-  RUNTIME DESTINATION bin
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   INCLUDES DESTINATION include
 )
 
@@ -125,9 +136,33 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/Export.h
   COMPONENT dev
   DESTINATION include/JsonBox
 )
+
+# The CMake package: find_package(JsonBox CONFIG) finds it under <prefix>, with the target JsonBox::JsonBox.
+include(CMakePackageConfigHelpers)
+set(JsonBox_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/JsonBox)
 install(EXPORT ${PROJECT_NAME}
-  DESTINATION lib${LIB_SUFFIX}/cmake
-  FILE ${PROJECT_NAME}Config.cmake
+  NAMESPACE JsonBox::
+  DESTINATION ${JsonBox_CMAKE_DIR}
+  FILE JsonBoxTargets.cmake
+)
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/JsonBoxConfig.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfig.cmake"
+  INSTALL_DESTINATION ${JsonBox_CMAKE_DIR}
+)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/install/JsonBoxConfigVersion.cmake"
+  DESTINATION ${JsonBox_CMAKE_DIR}
+)
+# for -DJsonBox_DIR=<prefix>/lib/cmake, how the package used to be found
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/JsonBoxConfigLegacy.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake
+  RENAME JsonBoxConfig.cmake
 )
 
 

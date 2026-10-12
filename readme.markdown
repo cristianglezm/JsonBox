@@ -40,6 +40,28 @@ make install
 
 You should replace <android_ndk> with the actual folder.
 
+## Using it from CMake
+
+`make install` (or `cmake --install`) installs a CMake package, found with `find_package` when the install prefix is in
+`CMAKE_PREFIX_PATH`:
+
+```cmake
+find_package(JsonBox 0.6 CONFIG REQUIRED)
+target_link_libraries(myApp PRIVATE JsonBox::JsonBox)
+```
+
+To build it together with your project, `add_subdirectory(JsonBox)` or `FetchContent` give the same `JsonBox::JsonBox` target.
+
+* The package is installed in `<libdir>/cmake/JsonBox/`, where `<libdir>` is what
+  [GNUInstallDirs](https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html) says for the platform (`lib`, `lib64`,
+  `lib/<arch>`). `-DLIB_SUFFIX=<suffix>` makes it `lib<suffix>`, which is what the Android build does: CMake does not look there
+  by itself, point `JsonBox_DIR` at the folder.
+* What worked before still works: the target called `JsonBox`, `-DJsonBox_DIR=<prefix>/lib/cmake` (the package used to be
+  installed there) and `cmake/Modules/FindJsonBox.cmake`.
+* `JsonBox_MAX_NESTING_DEPTH` sets how deeply arrays and objects may be nested in the JSON that is parsed (see `JsonBox/Value.h`).
+
+`test/package` is a small project that uses an install in each of these ways, CI builds it.
+
 ## Tests
 
 Build the tests with `-DJsonBox_BUILD_TESTS=ON` (needs GoogleTest, found with `find_package(GTest CONFIG)`, and CMake 3.13 or newer) and run `ctest` from the build directory. See `test/fuzz/README.md` for the fuzzers.

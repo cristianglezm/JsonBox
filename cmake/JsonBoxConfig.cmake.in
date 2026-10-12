@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/JsonBoxTargets.cmake")
+
+# The target used to be called JsonBox, without a namespace: that name keeps working.
+if(NOT TARGET JsonBox)
+    add_library(JsonBox INTERFACE IMPORTED)
+    set_target_properties(JsonBox PROPERTIES INTERFACE_LINK_LIBRARIES JsonBox::JsonBox)
+endif()
+
+check_required_components(JsonBox)

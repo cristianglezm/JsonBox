@@ -280,3 +280,40 @@ jobs:
             ..
           cmake --build . -j 4
           ctest --output-on-failure
+
+  # The installed CMake package, used in each way it is supported (see test/package).
+  package:
+    name: Linux CMake package
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Get CMake and Ninja
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "3.28"
+          ninjaVersion: latest
+
+      - name: Install JsonBox
+        run: |
+          cmake -S . -B build -GNinja -DJsonBox_BUILD_EXAMPLES=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+          cmake --install build --prefix $GITHUB_WORKSPACE/install
+
+      - name: Use it
+        run: |
+          for mode in config old-target old-dir module subdirectory wrong-version; do
+            echo "::group::$mode"
+            cmake -S test/package -B build-package-$mode -GNinja \
+              -DJSONBOX_CONSUME=$mode \
+              -DJSONBOX_SOURCE_DIR=$GITHUB_WORKSPACE \
+              -DJSONBOX_PREFIX=$GITHUB_WORKSPACE/install \
+              -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/install
+            if [ "$mode" != "wrong-version" ]; then
+              cmake --build build-package-$mode
+              ./build-package-$mode/consumer
+            fi
+            echo "::endgroup::"
+          done
