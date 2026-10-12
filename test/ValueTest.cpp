@@ -1,6 +1,13 @@
 #include <JsonBox.h>
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <iomanip>
+#include <limits>
+#include <locale>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <streambuf>
@@ -137,4 +144,97 @@ TEST(ValueParseTruncated, EveryPrefixOfADocumentTerminates){
         }
     }
     SUCCEED();
+}
+
+namespace{
+    // a locale that would write 1234.5 as 1.234,5
+    struct CommaPunct : std::numpunct<char>{
+        char do_decimal_point() const override{ return ','; }
+        char do_thousands_sep() const override{ return '.'; }
+        std::string do_grouping() const override{ return "\3"; }
+    };
+}
+
+TEST(WriteDouble, IsTheShortestTextThatReadsBackExactly){
+    EXPECT_EQ(write(JsonBox::Value(0.1)), "0.1");
+    EXPECT_EQ(write(JsonBox::Value(0.5489)), "0.5489");
+    EXPECT_EQ(write(JsonBox::Value(2.5)), "2.5");
+    EXPECT_EQ(write(JsonBox::Value(123456.789)), "123456.789");
+    EXPECT_EQ(write(JsonBox::Value(1e-7)), "1e-07");
+    EXPECT_EQ(write(JsonBox::Value(-0.25)), "-0.25");
+    // 1/3 needs all 17 digits: still exact
+    const double third = 1.0 / 3.0;
+    auto text = write(JsonBox::Value(third));
+    EXPECT_EQ(parse(text).getDouble(), third);
+    EXPECT_LE(text.size(), 19u);
+}
+
+TEST(WriteDouble, IntegralValuesAreStillWrittenWithoutAPoint){
+    // read back as an integer: getDouble() converts, and 0 and 1 stay short
+    EXPECT_EQ(write(JsonBox::Value(0.0)), "0");
+    EXPECT_EQ(write(JsonBox::Value(1.0)), "1");
+    EXPECT_EQ(write(JsonBox::Value(3.0)), "3");
+    EXPECT_EQ(parse(write(JsonBox::Value(1.0))).getDouble(), 1.0);
+}
+
+TEST(WriteDouble, EveryFiniteDoubleReadsBackExactly){
+    std::mt19937_64 rng(12345);
+    std::size_t checked = 0;
+    for(auto i=0u;i<20000u;++i){
+        auto bits = rng();
+        double d;
+        std::memcpy(&d, &bits, sizeof d);
+        if(!std::isfinite(d)){
+            continue;
+        }
+        auto text = write(JsonBox::Value(d));
+        // a whole number without a point or an exponent is read as an int, which saturates beyond 2^31
+        // (a limit of the parser, not of the writer)
+        if(text.find_first_of(".eE") == std::string::npos && std::fabs(d) >= 2147483648.0){
+            continue;
+        }
+        ASSERT_EQ(parse(text).getDouble(), d) << text;
+        ++checked;
+    }
+    EXPECT_GT(checked, 15000u);
+    // the values a trained map has plenty of: tiny ones, and ones in [0, 1]
+    for(auto i=0u;i<5000u;++i){
+        double d = std::generate_canonical<double, 53>(rng);
+        ASSERT_EQ(parse(write(JsonBox::Value(d))).getDouble(), d);
+        double tiny = d * 1e-300;
+        ASSERT_EQ(parse(write(JsonBox::Value(tiny))).getDouble(), tiny);
+    }
+}
+
+TEST(WriteDouble, DenormalsRoundTrip){
+    const double smallest = std::numeric_limits<double>::denorm_min();
+    EXPECT_EQ(parse(write(JsonBox::Value(smallest))).getDouble(), smallest);
+    const double denormal = 1e-320;
+    EXPECT_EQ(parse(write(JsonBox::Value(denormal))).getDouble(), denormal);
+}
+
+TEST(WriteDouble, DoesNotDependOnTheLocaleOrFlagsOfTheStream){
+    std::stringstream ss;
+    ss.imbue(std::locale(std::locale::classic(), new CommaPunct));
+    ss << std::fixed << std::setprecision(3);
+    JsonBox::Value(1234.5).writeToStream(ss, false, false);
+    EXPECT_EQ(ss.str(), "1234.5");
+}
+
+TEST(WriteDouble, DoesNotDependOnTheGlobalLocale){
+    struct Restore{
+        std::locale previous;
+        ~Restore(){ std::locale::global(previous); }
+    } restore{std::locale::global(std::locale(std::locale::classic(), new CommaPunct))};
+    std::stringstream ss; // takes the global locale
+    JsonBox::Value(1234.5).writeToStream(ss, false, false);
+    EXPECT_EQ(ss.str(), "1234.5");
+}
+
+TEST(WriteDouble, ArraysUseTheShortText){
+    JsonBox::Array a;
+    a.push_back(JsonBox::Value(0.5489));
+    a.push_back(JsonBox::Value(0.0));
+    a.push_back(JsonBox::Value(1.0));
+    EXPECT_EQ(write(JsonBox::Value(a)), "[0.5489,0,1]");
 }
