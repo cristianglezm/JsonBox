@@ -77,6 +77,12 @@ endif()
 
 generate_export_header(JsonBox EXPORT_FILE_NAME Export.h)
 
+# how deeply arrays and objects may be nested in the JSON that is parsed (see Value.h for the default)
+set(JsonBox_MAX_NESTING_DEPTH "" CACHE STRING "Deepest nesting of arrays and objects the parser accepts (empty: 512, 100 on Emscripten)")
+if(JsonBox_MAX_NESTING_DEPTH)
+  target_compile_definitions(JsonBox PUBLIC JSONBOX_MAX_NESTING_DEPTH=${JsonBox_MAX_NESTING_DEPTH})
+endif()
+
 if(EMSCRIPTEN)
   # the parser reports errors with exceptions, which Emscripten leaves off by default
   target_compile_options(JsonBox PUBLIC -fexceptions)

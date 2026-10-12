@@ -6,6 +6,7 @@
 #include <functional>
 #include <limits>
 #include <new>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -183,4 +184,18 @@ TEST(ValueInteger, ADoubleInRangeIsTruncatedAsBefore){
     EXPECT_EQ(Value(-2147483648.9).getInteger(), std::numeric_limits<int>::min());
     EXPECT_EQ(Value(41).getInteger(), 41);
     EXPECT_EQ(Value("x").tryGetInteger(9), 9);
+}
+
+TEST(ValueConstruction, ParsingThatFailsInTheStreamConstructorDoesNotLeak){
+    // the exception leaves the constructor, so the destructor never runs: the tree read so far
+    // has to be freed by the constructor (LeakSanitizer reports it when the program ends)
+    std::stringstream malformed("[\"a long enough string to not be stored inline in the object\", [1, 2], nul, 1]");
+    EXPECT_THROW(JsonBox::Value parsed(malformed), std::exception);
+    std::stringstream cut("{\"key\": [\"a long enough string to not be stored inline in the object\"");
+    JsonBox::Value ignored;
+    try{
+        JsonBox::Value parsed(cut);
+    }catch(const std::exception&){
+    }
+    SUCCEED();
 }
