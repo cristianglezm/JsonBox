@@ -1239,6 +1239,16 @@ namespace JsonBox {
 				constructing.clear();
 				constructing.seekg(0);
 				constructing >> doubleResult;
+
+				// When the text is out of range for a double the standard libraries differ: libstdc++ stores the
+				// largest double and libc++ infinity (which is not JSON). The largest one, with the sign, on all.
+				if (doubleResult > std::numeric_limits<double>::max()) {
+					doubleResult = std::numeric_limits<double>::max();
+
+				} else if (doubleResult < -std::numeric_limits<double>::max()) {
+					doubleResult = -std::numeric_limits<double>::max();
+				}
+
 				result.setDouble(doubleResult);
 
 			} else {

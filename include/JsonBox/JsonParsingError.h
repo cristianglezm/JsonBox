@@ -3,13 +3,14 @@
 
 #include <string>
 #include <stdexcept>
+#include "Export.h"
 
 namespace JsonBox {
 	/**
 	 * Defines a type of object to be thrown as exception. It reports errors
 	 * that occur when parsing JSON.
 	 */
-	class JsonParsingError : public std::runtime_error {
+	class JSONBOX_EXPORT JsonParsingError : public std::runtime_error {
 	public:
 		/**
 		 * Constructs the exception with what as an explanatory string that can

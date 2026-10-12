@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <stdint.h>
+#include "Export.h"
 
 namespace JsonBox {
 	
@@ -12,7 +13,7 @@ namespace JsonBox {
 	/**
 	 * This class is used to encode/decode/transcode UTF8, 16 and 32.
 	 */
-	class Convert {
+	class JSONBOX_EXPORT Convert {
 	public:
 		/**
 		 * Encode the given UTF32 string to a 8bit UTF8 one.
