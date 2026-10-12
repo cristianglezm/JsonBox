@@ -240,3 +240,43 @@ jobs:
           mkdir build && cd build
           cmake ${{ matrix.config.flags }} ${{ matrix.type.flags }} ..
           cmake --build . --config ${{ matrix.type.name }} -j 4
+
+  sanitizers:
+    name: Linux Sanitizers (ASan + UBSan)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Get CMake and Ninja
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "3.28"
+          ninjaVersion: latest
+
+      - name: Cache Deps
+        id: cache-deps
+        uses: actions/cache@v6
+        with:
+          path: googletest/build/install
+          key: desktop-${{ runner.os }}-Linux Sanitizers-Debug-${{ hashFiles('.devops/install_dependencies.sh') }}
+
+      - name: Build Dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          bash .devops/install_dependencies.sh "Linux Sanitizers" Debug
+
+      # Memory errors and undefined behaviour abort the test that hits them (no recovery), so a
+      # failure names the test. GoogleTest itself is built without the sanitizers, which is fine.
+      - name: Build and Test
+        run: |
+          mkdir build && cd build
+          cmake -GNinja \
+            -DJsonBox_BUILD_TESTS=TRUE -DJsonBox_BUILD_EXAMPLES=FALSE \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+            -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/googletest/build/install \
+            ..
+          cmake --build . -j 4
+          ctest --output-on-failure
