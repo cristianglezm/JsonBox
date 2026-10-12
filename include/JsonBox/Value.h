@@ -107,7 +107,8 @@ namespace JsonBox {
 
 		/**
 		 * Constructs the value from a C-style string.
-		 * @param newCString C-style string used as the value.
+		 * @param newCString C-style string used as the value. A null pointer
+		 * gives a null value.
 		 */
 		Value(const char *newCString);
 
@@ -290,6 +291,8 @@ namespace JsonBox {
 		 * to be of size index + 1.
 		 * @param index Index of the value to get.
 		 * @return Reference to the value at the received index in the array.
+		 * @throw std::out_of_range if the index is too large for an array
+		 * (std::vector::max_size() or more). The value is left unchanged.
 		 */
 		Value &operator[](size_t index);
 
@@ -400,7 +403,9 @@ namespace JsonBox {
 		 * @param defaultValue Integer value to return if the value doesn't
 		 * contain a numeric value.
 		 * @return Value's integer value, or defaultValue if the value doesn't
-		 * contain a numeric value.
+		 * contain a numeric value. A double is truncated toward zero; one
+		 * outside of the range of int gives the closest int, and NaN gives
+		 * defaultValue.
 		 */
 		int tryGetInteger(int defaultValue) const;
 

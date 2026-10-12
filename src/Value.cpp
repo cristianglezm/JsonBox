@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <fstream>
 #include <stdexcept>
+#include <limits>
 
 #include <JsonBox/Grammar.h>
 #include <JsonBox/Convert.h>
@@ -162,8 +163,8 @@ namespace JsonBox {
 		data(new std::string(newString)) {
 	}
 
-	Value::Value(const char *newCString) : type(STRING),
-		data(new std::string(newCString)) {
+	Value::Value(const char *newCString) : type((newCString) ? (STRING) : (NULL_VALUE)),
+		data((newCString) ? (new std::string(newCString)) : (static_cast<std::string *>(NULL))) {
 	}
 
 	Value::Value(int newInt) : type(INTEGER), data(new int(newInt)) {
@@ -221,39 +222,14 @@ namespace JsonBox {
 
 	Value &Value::operator=(const Value &src) {
 		if (this != &src) {
+			// The copy is made first: if it throws, this value is left as it was. Then the
+			// payload moves over, which cannot throw.
+			Value copy(src);
 			clear();
-			type = src.type;
-
-			switch (type) {
-			case STRING:
-				data.stringValue = new std::string(*src.data.stringValue);
-				break;
-
-			case INTEGER:
-				data.intValue = new int(*src.data.intValue);
-				break;
-
-			case DOUBLE:
-				data.doubleValue = new double(*src.data.doubleValue);
-				break;
-
-			case OBJECT:
-				data.objectValue = new Object(*src.data.objectValue);
-				break;
-
-			case ARRAY:
-				data.arrayValue = new Array(*src.data.arrayValue);
-				break;
-
-			case BOOLEAN:
-				data.boolValue = new bool(*src.data.boolValue);
-				break;
-
-			default:
-				type = NULL_VALUE;
-				data.stringValue = NULL;
-				break;
-			}
+			type = copy.type;
+			data = copy.data;
+			copy.type = NULL_VALUE;
+			copy.data.stringValue = NULL;
 		}
 
 		return *this;
@@ -266,7 +242,12 @@ namespace JsonBox {
 	}
 
 	Value &Value::operator=(const char *src) {
-		this->setString(src);
+		if (src) {
+			this->setString(src);
+
+		} else {
+			this->setNull();
+		}
 
 		return *this;
 	}
@@ -401,9 +382,11 @@ namespace JsonBox {
 
 	Value &Value::operator[](const Object::key_type &key) {
 		if (type != OBJECT) {
+			// allocated before clear(): if it throws, the value is left as it was
+			Object *created = new Object();
 			clear();
 			type = OBJECT;
-			data.objectValue = new Object();
+			data.objectValue = created;
 		}
 
 		return (*data.objectValue)[key];
@@ -414,11 +397,19 @@ namespace JsonBox {
 	}
 
 	Value &Value::operator[](Array::size_type index) {
+		// index + 1 would wrap around for the largest index, and an array cannot hold more
+		// than max_size() values
+		if (index >= Array().max_size()) {
+			throw std::out_of_range("JsonBox::Value::operator[]: the index is too large for an array");
+		}
+
 		// We make sure it's an array.
 		if (type != ARRAY) {
+			// allocated before clear(): if it throws, the value is left as it was
+			Array *created = new Array(index + 1);
 			clear();
 			type = ARRAY;
-			data.arrayValue = new Array(index + 1);
+			data.arrayValue = created;
 		} else if (index >= (*data.arrayValue).size()) {
 			// We make sure the array is big enough.
 			data.arrayValue->resize(index + 1);
@@ -515,9 +506,11 @@ namespace JsonBox {
 			*data.stringValue = newString;
 
 		} else {
+			// allocated before clear(): if it throws, the value is left as it was
+			std::string *created = new std::string(newString);
 			clear();
 			type = STRING;
-			data.stringValue = new std::string(newString);
+			data.stringValue = created;
 		}
 	}
 
@@ -526,7 +519,27 @@ namespace JsonBox {
 	}
 
 	int Value::tryGetInteger(int defaultValue) const {
-		return (type == INTEGER) ? (*data.intValue) : ((type == DOUBLE) ? (static_cast<int>(*data.doubleValue)) : (defaultValue));
+		if (type == INTEGER) {
+			return *data.intValue;
+
+		} else if (type == DOUBLE) {
+			// converting a double that does not fit in an int (or NaN) is undefined behaviour
+			const double number = *data.doubleValue;
+
+			if (number != number) {
+				return defaultValue;
+
+			} else if (number >= 2147483648.0) {
+				return std::numeric_limits<int>::max();
+
+			} else if (number <= -2147483649.0) {
+				return std::numeric_limits<int>::min();
+			}
+
+			return static_cast<int>(number);
+		}
+
+		return defaultValue;
 	}
 
 	void Value::setInteger(int newInteger) {
@@ -534,9 +547,11 @@ namespace JsonBox {
 			*data.intValue = newInteger;
 
 		} else {
+			// allocated before clear(): if it throws, the value is left as it was
+			int *created = new int(newInteger);
 			clear();
 			type = INTEGER;
-			data.intValue = new int(newInteger);
+			data.intValue = created;
 		}
 	}
 
@@ -561,9 +576,11 @@ namespace JsonBox {
 			*data.doubleValue = newDouble;
 
 		} else {
+			// allocated before clear(): if it throws, the value is left as it was
+			double *created = new double(newDouble);
 			clear();
 			type = DOUBLE;
-			data.doubleValue = new double(newDouble);
+			data.doubleValue = created;
 		}
 	}
 
@@ -576,9 +593,11 @@ namespace JsonBox {
 			*data.objectValue = newObject;
 
 		} else {
+			// allocated before clear(): if it throws, the value is left as it was
+			Object *created = new Object(newObject);
 			clear();
 			type = OBJECT;
-			data.objectValue = new Object(newObject);
+			data.objectValue = created;
 		}
 	}
 
@@ -591,9 +610,11 @@ namespace JsonBox {
 			*data.arrayValue = newArray;
 
 		} else {
+			// allocated before clear(): if it throws, the value is left as it was
+			Array *created = new Array(newArray);
 			clear();
 			type = ARRAY;
-			data.arrayValue = new Array(newArray);
+			data.arrayValue = created;
 		}
 	}
 
@@ -610,9 +631,11 @@ namespace JsonBox {
 			*data.boolValue = newBoolean;
 
 		} else {
+			// allocated before clear(): if it throws, the value is left as it was
+			bool *created = new bool(newBoolean);
 			clear();
 			type = BOOLEAN;
-			data.boolValue = new bool(newBoolean);
+			data.boolValue = created;
 		}
 	}
 
