@@ -8,6 +8,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <limits>
+#include <locale>
 
 #include <JsonBox/Grammar.h>
 #include <JsonBox/Convert.h>
@@ -481,12 +482,14 @@ namespace JsonBox {
 
 		case INTEGER: {
 				std::stringstream ss;
+				ss.imbue(std::locale::classic());
 				ss << *data.intValue;
 				return ss.str();
 			}
 
 		case DOUBLE: {
 				std::stringstream ss;
+				ss.imbue(std::locale::classic());
 				ss << *data.doubleValue;
 				return ss.str();
 			}
@@ -1168,6 +1171,8 @@ namespace JsonBox {
 		bool notDone = true, inFraction = false, inExponent = false;
 		char currentCharacter = '\0';
 		std::stringstream constructing;
+		// the digits are read back with >>, which must not depend on the global locale
+		constructing.imbue(std::locale::classic());
 
 		if (input.good() && input.peek() == Numbers::DIGITS[0]) {
 			// We make sure there isn't more than one zero.
@@ -1278,14 +1283,38 @@ namespace JsonBox {
 		}
 	}
 
+namespace {
+		// Installs a filter as the buffer of a stream, and puts the buffer the stream had back when it
+		// goes out of scope, also when an exception passes: the filters live on the stack, a stream
+		// left pointing at one is a stream pointing at freed memory. (Like rdbuf() itself, both steps
+		// clear the stream's error state, as the code did before.)
+		class BufferSwap {
+			public:
+				BufferSwap(std::ostream &newStream, std::streambuf *filter) : stream(newStream),
+					original(newStream.rdbuf()) {
+					stream.rdbuf(filter);
+				}
+
+				~BufferSwap() {
+					stream.rdbuf(original);
+				}
+
+			private:
+				BufferSwap(const BufferSwap &);
+				BufferSwap &operator=(const BufferSwap &);
+
+				std::ostream &stream;
+				std::streambuf *original;
+		};
+	}
+
 	void Value::output(std::ostream &output, bool indent,
 	                   bool escapeAll) const {
 		if (indent) {
 			if (escapeAll) {
 				OutputFilter<SolidusEscaper> solidusEscaper(output.rdbuf());
-				output.rdbuf(&solidusEscaper);
+				BufferSwap swap(output, &solidusEscaper);
 				output << *this;
-				output.rdbuf(solidusEscaper.getDestination());
 
 			} else {
 				output << *this;
@@ -1293,19 +1322,16 @@ namespace JsonBox {
 
 		} else {
 			OutputFilter<IndentCanceller> indentCanceller(output.rdbuf());
-			output.rdbuf(&indentCanceller);
+			BufferSwap cancelIndentation(output, &indentCanceller);
 
 			if (escapeAll) {
 				OutputFilter<SolidusEscaper> solidusEscaper(output.rdbuf());
-				output.rdbuf(&solidusEscaper);
+				BufferSwap swap(output, &solidusEscaper);
 				output << *this;
-				output.rdbuf(solidusEscaper.getDestination());
 
 			} else {
 				output << *this;
 			}
-
-			output.rdbuf(indentCanceller.getDestination());
 		}
 	}
 
@@ -1354,7 +1380,9 @@ namespace JsonBox {
 			break;
 
 		case Value::INTEGER:
-			output << v.getInteger();
+			// not output << int: the locale and the flags (std::hex, std::showpos...) of the stream
+			// would change the text
+			output << std::to_string(v.getInteger());
 			break;
 
 		case Value::DOUBLE:
@@ -1390,18 +1418,19 @@ namespace JsonBox {
 
 		} else {
 			output << Structural::BEGIN_ARRAY << std::endl;
-			OutputFilter<Indenter> indent(output.rdbuf());
-			output.rdbuf(&indent);
 
-			for (Array::const_iterator i = a.begin(); i != a.end(); ++i) {
-				if (i != a.begin()) {
-					output << Structural::VALUE_SEPARATOR << std::endl;
+			{
+				OutputFilter<Indenter> indent(output.rdbuf());
+				BufferSwap swap(output, &indent);
+
+				for (Array::const_iterator i = a.begin(); i != a.end(); ++i) {
+					if (i != a.begin()) {
+						output << Structural::VALUE_SEPARATOR << std::endl;
+					}
+
+					output << *i;
 				}
-
-				output << *i;
 			}
-
-			output.rdbuf(indent.getDestination());
 
 			output << std::endl << Structural::END_ARRAY;
 		}
@@ -1416,20 +1445,21 @@ namespace JsonBox {
 
 		} else {
 			output << Structural::BEGIN_OBJECT << std::endl;
-			OutputFilter<Indenter> indent(output.rdbuf());
-			output.rdbuf(&indent);
 
-			// For each item in the object.
-			for (Object::const_iterator i = o.begin(); i != o.end(); ++i) {
-				if (i != o.begin()) {
-					output << Structural::VALUE_SEPARATOR << std::endl;
+			{
+				OutputFilter<Indenter> indent(output.rdbuf());
+				BufferSwap swap(output, &indent);
+
+				// For each item in the object.
+				for (Object::const_iterator i = o.begin(); i != o.end(); ++i) {
+					if (i != o.begin()) {
+						output << Structural::VALUE_SEPARATOR << std::endl;
+					}
+
+					// We print the name of the attribute and its value.
+					output << Structural::BEGIN_END_STRING << Value::escapeMinimumCharacters(i->first) << Structural::BEGIN_END_STRING << Whitespace::SPACE << Structural::NAME_SEPARATOR << Whitespace::SPACE << i->second;
 				}
-
-				// We print the name of the attribute and its value.
-				output << Structural::BEGIN_END_STRING << Value::escapeMinimumCharacters(i->first) << Structural::BEGIN_END_STRING << Whitespace::SPACE << Structural::NAME_SEPARATOR << Whitespace::SPACE << i->second;
 			}
-
-			output.rdbuf(indent.getDestination());
 
 			output << std::endl << Structural::END_OBJECT;
 		}
