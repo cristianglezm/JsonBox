@@ -156,7 +156,15 @@ namespace JsonBox {
 	}
 
 	Value::Value(std::istream &input) : type(NULL_VALUE), data() {
-		loadFromStream(input);
+		try {
+			loadFromStream(input);
+
+		} catch (...) {
+			// the exception leaves the constructor, so the destructor will not run: the part of the
+			// value that was read has to be freed here
+			clear();
+			throw;
+		}
 	}
 
 	Value::Value(const std::string &newString) : type(STRING),
@@ -651,6 +659,10 @@ namespace JsonBox {
 	}
 
 	void Value::loadFromStream(std::istream &input) {
+		readValue(input, 0);
+	}
+
+	void Value::readValue(std::istream &input, std::size_t depth) {
 		char currentCharacter;
 
 		// We check that the stream is in UTF-8. A NUL among the first two characters means UTF-16/32;
@@ -693,14 +705,16 @@ namespace JsonBox {
 
 					} else if (currentCharacter == Structural::BEGIN_OBJECT) {
 						// The value to be parsed is an object.
+						checkDepth(depth);
 						setObject(Object());
-						readObject(input, *data.objectValue);
+						readObject(input, *data.objectValue, depth);
 						reading = false;
 
 					} else if (currentCharacter == Structural::BEGIN_ARRAY) {
 						// The value to be parsed is an array.
+						checkDepth(depth);
 						setArray(Array());
-						readArray(input, *data.arrayValue);
+						readArray(input, *data.arrayValue, depth);
 						reading = false;
 
 					} else if (currentCharacter == Literals::NULL_STRING[0]) {
@@ -1064,7 +1078,7 @@ namespace JsonBox {
 		}
 	}
 
-	void Value::readObject(std::istream &input, Object &result) {
+	void Value::readObject(std::istream &input, Object &result, std::size_t depth) {
 		bool noErrors = true;
 		char currentCharacter = '\0';
 		std::string tmpString;
@@ -1091,7 +1105,7 @@ namespace JsonBox {
 								// We put the character back and we load the value
 								// from the stream.
 								input.putback(currentCharacter);
-								result[tmpString].loadFromStream(input);
+								result[tmpString].readValue(input, depth + 1);
 
 								while (input.good() && currentCharacter != Structural::VALUE_SEPARATOR &&
 								       currentCharacter != Structural::END_OBJECT) {
@@ -1116,7 +1130,7 @@ namespace JsonBox {
 		}
 	}
 
-	void Value::readArray(std::istream &input, Array &result) {
+	void Value::readArray(std::istream &input, Array &result, std::size_t depth) {
 		bool notDone = true;
 		char currentChar = '\0';
 
@@ -1131,7 +1145,7 @@ namespace JsonBox {
 					input.putback(currentChar);
 					result.push_back(Value());
 					result.back().type = UNKNOWN;
-					result.back().loadFromStream(input);
+					result.back().readValue(input, depth + 1);
 
 					if (result.back().type == UNKNOWN) {
 						result.pop_back();
@@ -1211,6 +1225,16 @@ namespace JsonBox {
 			int intResult;
 			constructing >> intResult;
 			result.setInteger(intResult);
+		}
+	}
+
+	void Value::checkDepth(std::size_t depth) {
+		// depth is the number of arrays and objects the one about to be read is inside of
+		if (depth >= static_cast<std::size_t>(JSONBOX_MAX_NESTING_DEPTH)) {
+			std::stringstream message;
+			message << "JSON is nested too deeply: more than " << JSONBOX_MAX_NESTING_DEPTH
+			        << " levels of arrays and objects.";
+			throw JsonParsingError(message.str());
 		}
 	}
 

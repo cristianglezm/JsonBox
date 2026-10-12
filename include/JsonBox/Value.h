@@ -8,6 +8,21 @@
 
 #include "Export.h"
 
+/**
+ * How deeply arrays and objects may be nested in the JSON that is parsed. Deeper input makes the
+ * parser throw JsonParsingError: every level uses stack (about 300 to 450 bytes, measured on Linux
+ * x86-64 with -O3), and past the end of the stack the program crashes (on Emscripten it may
+ * silently corrupt memory instead). The default is 512, or 100 on Emscripten, whose stack is 64 KB
+ * unless the link sets STACK_SIZE. Set it with the CMake variable JsonBox_MAX_NESTING_DEPTH.
+ */
+#ifndef JSONBOX_MAX_NESTING_DEPTH
+#ifdef __EMSCRIPTEN__
+#define JSONBOX_MAX_NESTING_DEPTH 100
+#else
+#define JSONBOX_MAX_NESTING_DEPTH 512
+#endif
+#endif
+
 namespace JsonBox {
 	class Value;
 
@@ -525,6 +540,8 @@ namespace JsonBox {
 		 * sequences are interpreted as two unicode characters, so it doesn't
 		 * support perfect parsing.
 		 * @param input Input stream to read from. Can be a file stream.
+		 * @throw JsonParsingError if arrays and objects are nested more than
+		 * JSONBOX_MAX_NESTING_DEPTH levels deep.
 		 */
 		void loadFromStream(std::istream &input);
 
@@ -638,18 +655,35 @@ namespace JsonBox {
 		static void readString(std::istream &input, std::string &result);
 
 		/**
+		 * Reads a JSON value from an input stream, what loadFromStream() does.
+		 * @param input Input stream to read the value from.
+		 * @param depth Number of arrays and objects this value is inside of.
+		 */
+		void readValue(std::istream &input, std::size_t depth);
+
+		/**
+		 * Throws a JsonParsingError if an array or an object that is inside of
+		 * depth others is too deep.
+		 * @param depth Number of arrays and objects the one about to be read
+		 * is inside of.
+		 */
+		static void checkDepth(std::size_t depth);
+
+		/**
 		 * Reads a JSON object from an input stream.
 		 * @param input Input stream to read the object from.
 		 * @param result Object read from the input stream.
+		 * @param depth Number of arrays and objects this object is inside of.
 		 */
-		static void readObject(std::istream &input, Object &result);
+		static void readObject(std::istream &input, Object &result, std::size_t depth);
 
 		/**
 		 * Reads a JSON array from an input stream.
 		 * @param input Input stream to read the array from.
 		 * @param result Array read from the input stream.
+		 * @param depth Number of arrays and objects this array is inside of.
 		 */
-		static void readArray(std::istream &input, Array &result);
+		static void readArray(std::istream &input, Array &result, std::size_t depth);
 
 		/**
 		 * Reads a JSON number from an input stream.
