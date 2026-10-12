@@ -1229,7 +1229,21 @@ namespace JsonBox {
 		} else {
 			int intResult;
 			constructing >> intResult;
-			result.setInteger(intResult);
+
+			if (constructing.fail() && (intResult == std::numeric_limits<int>::max() || intResult == std::numeric_limits<int>::min())) {
+				// The number does not fit in an int: the conversion stored the largest or the smallest int
+				// and failed, which used to be what the value became. It is read as a double instead (exact up
+				// to 2^53). A conversion that fails because there are no digits (a lone '-') stores 0 and is
+				// not this.
+				double doubleResult;
+				constructing.clear();
+				constructing.seekg(0);
+				constructing >> doubleResult;
+				result.setDouble(doubleResult);
+
+			} else {
+				result.setInteger(intResult);
+			}
 		}
 	}
 

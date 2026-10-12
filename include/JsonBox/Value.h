@@ -542,6 +542,8 @@ namespace JsonBox {
 		 * @param input Input stream to read from. Can be a file stream.
 		 * @throw JsonParsingError if arrays and objects are nested more than
 		 * JSONBOX_MAX_NESTING_DEPTH levels deep.
+		 * @note A number without a fraction or an exponent is an integer if it
+		 * fits in an int, and a double if it does not (exact up to 2^53).
 		 */
 		void loadFromStream(std::istream &input);
 
