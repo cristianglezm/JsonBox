@@ -2,6 +2,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstdio>
+#include <exception>
 #include <cstdlib>
 #include <functional>
 #include <limits>
@@ -78,6 +80,25 @@ namespace{
         return threw;
     }
 
+    // Where the injection is, for the message of a std::terminate: a noexcept function that does not let
+    // bad_alloc through ends the program without a word, and then this is all there is to read.
+    const char* currentCase = "";
+    long currentPoint = -1;
+
+    void reportTerminate(){
+        std::fprintf(stderr, "\nstd::terminate while failing allocation %ld of '%s': a noexcept function did not let "
+                     "bad_alloc through (the debug library of MSVC allocates in constructors it declares noexcept)\n",
+                     currentPoint, currentCase);
+        std::fflush(stderr);
+        std::abort();
+    }
+
+    struct TerminateReport{
+        std::terminate_handler previous;
+        TerminateReport() : previous(std::set_terminate(reportTerminate)){}
+        ~TerminateReport(){ std::set_terminate(previous); }
+    };
+
     // Runs `operation` on a copy of `original`, failing the 0th, 1st, 2nd... allocation inside it,
     // until it finishes. A failed operation must leave the value as it was (and destroying it must
     // not touch freed memory: that is what the sanitizers are for). Returns the failures injected.
@@ -90,6 +111,7 @@ namespace{
         for(long point = 0; point < limit && !completed; ++point){
             Value value = original;
             allocations = 0;
+            currentPoint = point;
             failAt = point;
             try{
                 operation(value);
@@ -118,8 +140,10 @@ namespace{
 
     // every case on its own, with its name in every message
     void expectEveryFailureHandled(const std::vector<Injection>& cases){
+        TerminateReport report;
         for(const auto& c : cases){
             SCOPED_TRACE(c.name);
+            currentCase = c.name;
             const int failures = forEveryFailurePoint(c.original, c.operation, c.mustBeUnchanged);
             EXPECT_GT(failures, 0) << c.name << ": no allocation inside the operation could be made to fail";
         }
@@ -184,6 +208,33 @@ TEST(ValueIndex, AHugeIndexIsRejected){
     Value text("kept");
     EXPECT_THROW(text[huge], std::out_of_range);
     EXPECT_EQ(text.getString(), "kept");
+}
+
+TEST(ValueIndex, UsingAnIndexOfAnExistingElementAllocatesNothing){
+    // The check of the index runs for every v[i]. It must not allocate: the debug library of MSVC allocates
+    // in the constructor of a vector, which is noexcept, so a check that makes one ends the program when
+    // an allocation fails, where it should not even notice. (Not a rejected index: the exception that is
+    // thrown for it allocates its message.)
+    if(!injectionWorks()){ GTEST_SKIP() << "operator new cannot be replaced in this build"; }
+    TerminateReport report;
+    currentCase = "v[i] of an existing element";
+    Value array;
+    array[2] = 7;
+    for(std::size_t index : {std::size_t(0), std::size_t(1), std::size_t(2)}){
+        bool allocated = false;
+        int found = -1;
+        allocations = 0;
+        currentPoint = 0;
+        failAt = 0; // the first allocation made from here on fails
+        try{
+            found = array[index].getInteger();
+        }catch(const std::bad_alloc&){
+            allocated = true;
+        }
+        failAt = -1;
+        EXPECT_FALSE(allocated) << "the check of the index allocated (index " << index << ")";
+        EXPECT_EQ(found, index == 2 ? 7 : 0);
+    }
 }
 
 TEST(ValueIndex, OrdinaryIndexesStillGrowTheArray){

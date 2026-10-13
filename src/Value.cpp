@@ -8,6 +8,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <limits>
+#include <cstddef>
 #include <locale>
 
 #include <JsonBox/Grammar.h>
@@ -34,6 +35,15 @@ namespace JsonBox {
 	 * @see JsonBox::Value::getInt
 	 */
 	static const int EMPTY_INT = 0;
+
+	/**
+	 * More values than a std::vector can hold on any standard library: PTRDIFF_MAX / sizeof(Value) is what
+	 * vector::max_size() gives with libstdc++ and MSVC, libc++ allows a little more. A constant and not
+	 * Array().max_size(): that constructs a vector to ask it, once for every index that is used, and
+	 * the debug library of MSVC allocates in the constructor of a vector, which is noexcept (a failed
+	 * allocation ends the program there instead of throwing bad_alloc).
+	 */
+	static const std::size_t MAX_ARRAY_SIZE = static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(Value);
 	
 	/**
 	 * Default double value returned by getDouble() when the value doesn't
@@ -406,9 +416,8 @@ namespace JsonBox {
 	}
 
 	Value &Value::operator[](Array::size_type index) {
-		// index + 1 would wrap around for the largest index, and an array cannot hold more
-		// than max_size() values
-		if (index >= Array().max_size()) {
+		// index + 1 would wrap around for the largest index, and an array cannot hold that many values
+		if (index >= MAX_ARRAY_SIZE) {
 			throw std::out_of_range("JsonBox::Value::operator[]: the index is too large for an array");
 		}
 

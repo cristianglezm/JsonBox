@@ -307,7 +307,7 @@ namespace JsonBox {
 		 * @param index Index of the value to get.
 		 * @return Reference to the value at the received index in the array.
 		 * @throw std::out_of_range if the index is too large for an array
-		 * (std::vector::max_size() or more). The value is left unchanged.
+		 * (PTRDIFF_MAX / sizeof(Value) or more). The value is left unchanged.
 		 */
 		Value &operator[](size_t index);
 
