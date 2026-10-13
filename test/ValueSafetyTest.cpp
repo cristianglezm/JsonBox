@@ -9,6 +9,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 // Allocation failure injection: while armed, the Nth allocation throws std::bad_alloc. Inert
 // otherwise. (It replaces operator new for the whole test executable.)
@@ -83,10 +84,11 @@ namespace{
     // (mustBeUnchanged = false only checks that the value is still valid: it is destroyed below)
     int forEveryFailurePoint(const Value& original, const std::function<void(Value&)>& operation,
                              bool mustBeUnchanged = true){
+        const long limit = 512; // the debug library of some compilers allocates for every container
         int failures = 0;
-        for(long point = 0; point < 64; ++point){
+        bool completed = false;
+        for(long point = 0; point < limit && !completed; ++point){
             Value value = original;
-            bool completed = false;
             allocations = 0;
             failAt = point;
             try{
@@ -95,14 +97,32 @@ namespace{
             }catch(const std::bad_alloc&){
                 ++failures;
             }
+            const long made = allocations;
             failAt = -1;
             if(!completed){
-                EXPECT_TRUE(!mustBeUnchanged || value == original) << "allocation " << point << " failed and the value changed";
-            }else{
-                break;
+                EXPECT_TRUE(!mustBeUnchanged || value == original)
+                    << "allocation " << point << " failed (the operation made " << made
+                    << " before it) and the value changed";
             }
         }
+        EXPECT_TRUE(completed) << "the operation did not finish within " << limit << " failure points";
         return failures;
+    }
+
+    struct Injection{
+        const char* name;
+        Value original;
+        std::function<void(Value&)> operation;
+        bool mustBeUnchanged;
+    };
+
+    // every case on its own, with its name in every message
+    void expectEveryFailureHandled(const std::vector<Injection>& cases){
+        for(const auto& c : cases){
+            SCOPED_TRACE(c.name);
+            const int failures = forEveryFailurePoint(c.original, c.operation, c.mustBeUnchanged);
+            EXPECT_GT(failures, 0) << c.name << ": no allocation inside the operation could be made to fail";
+        }
     }
 
     Value longString(){
@@ -120,9 +140,11 @@ namespace{
 TEST(ValueExceptionSafety, CopyAssignmentLeavesTheTargetAloneWhenAnAllocationFails){
     if(!injectionWorks()){ GTEST_SKIP() << "operator new cannot be replaced in this build"; }
     Value source = sample();
-    EXPECT_GT(forEveryFailurePoint(longString(), [&](Value& v){ v = source; }), 0);
-    EXPECT_GT(forEveryFailurePoint(sample(), [&](Value& v){ v = source; }), 0);
-    EXPECT_GT(forEveryFailurePoint(Value(1), [&](Value& v){ v = source; }), 0);
+    expectEveryFailureHandled({
+        {"copy a document over a string", longString(), [&](Value& v){ v = source; }, true},
+        {"copy a document over a document", sample(), [&](Value& v){ v = source; }, true},
+        {"copy a document over an integer", Value(1), [&](Value& v){ v = source; }, true}
+    });
 }
 
 TEST(ValueExceptionSafety, SettersLeaveTheValueAloneWhenAnAllocationFails){
@@ -133,16 +155,18 @@ TEST(ValueExceptionSafety, SettersLeaveTheValueAloneWhenAnAllocationFails){
     array.push_back(Value(std::string(100, 'a')));
     const std::string text(100, 't');
 
-    EXPECT_GT(forEveryFailurePoint(sample(), [&](Value& v){ v.setString(text); }), 0);
-    EXPECT_GT(forEveryFailurePoint(sample(), [&](Value& v){ v.setInteger(1); }), 0);
-    EXPECT_GT(forEveryFailurePoint(sample(), [&](Value& v){ v.setDouble(1.5); }), 0);
-    EXPECT_GT(forEveryFailurePoint(sample(), [&](Value& v){ v.setBoolean(true); }), 0);
-    EXPECT_GT(forEveryFailurePoint(longString(), [&](Value& v){ v.setObject(object); }), 0);
-    EXPECT_GT(forEveryFailurePoint(longString(), [&](Value& v){ v.setArray(array); }), 0);
-    EXPECT_GT(forEveryFailurePoint(sample(), [&](Value& v){ v = text; }), 0);
-    // the value becomes an object before the key is inserted: valid, not necessarily unchanged
-    EXPECT_GT(forEveryFailurePoint(longString(), [&](Value& v){ v["key"] = 1; }, false), 0);
-    EXPECT_GT(forEveryFailurePoint(longString(), [&](Value& v){ (void) v[3]; }), 0);
+    expectEveryFailureHandled({
+        {"setString on a document", sample(), [&](Value& v){ v.setString(text); }, true},
+        {"setInteger on a document", sample(), [&](Value& v){ v.setInteger(1); }, true},
+        {"setDouble on a document", sample(), [&](Value& v){ v.setDouble(1.5); }, true},
+        {"setBoolean on a document", sample(), [&](Value& v){ v.setBoolean(true); }, true},
+        {"setObject on a string", longString(), [&](Value& v){ v.setObject(object); }, true},
+        {"setArray on a string", longString(), [&](Value& v){ v.setArray(array); }, true},
+        {"assign a std::string to a document", sample(), [&](Value& v){ v = text; }, true},
+        // the value becomes an object before the key is inserted: valid, not necessarily unchanged
+        {"v[\"key\"] = 1 on a string", longString(), [&](Value& v){ v["key"] = 1; }, false},
+        {"v[3] on a string", longString(), [&](Value& v){ (void) v[3]; }, true}
+    });
 }
 
 TEST(ValueIndex, AHugeIndexIsRejected){

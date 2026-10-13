@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7.2...3.17)
 
-project(JsonBox VERSION 0.6.2)
+project(JsonBox VERSION 0.6.3)
 
 option(JsonBox_BUILD_TESTS "Build the tests" OFF)
 option(JsonBox_BUILD_FUZZERS "Build the libFuzzer harnesses (Clang only)" OFF)
